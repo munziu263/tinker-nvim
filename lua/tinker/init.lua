@@ -183,6 +183,81 @@ local function get_runner_terminal()
   return term
 end
 
+-- Project-root markers (same as tinker CLI)
+local root_markers = { ".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml" }
+
+-- Walk up from `path` to find the project root
+local function find_project_root(path)
+  local dir = vim.fn.fnamemodify(path, ":h")
+  while dir and dir ~= "/" do
+    for _, marker in ipairs(root_markers) do
+      if vim.fn.glob(dir .. "/" .. marker) ~= "" then
+        return dir
+      end
+    end
+    dir = vim.fn.fnamemodify(dir, ":h")
+  end
+  return nil
+end
+
+-- Parse a minimal TOML [repl] section from lines
+local function parse_repl_section(lines)
+  local in_repl = false
+  local result = {}
+  for _, line in ipairs(lines) do
+    if line:match("^%[repl%]") then
+      in_repl = true
+    elseif in_repl then
+      if line:match("^%[") then
+        break -- next section
+      end
+      local key, value = line:match("^(%w+)%s*=%s*(.*)")
+      if key and value then
+        if key == "cmd" then
+          result.cmd = value:match('^"(.*)"')
+        elseif key == "startup" then
+          -- Parse array: startup = ["a", "b"]
+          local items = {}
+          for item in value:gmatch('"([^"]*)"') do
+            items[#items + 1] = item
+          end
+          result.startup = items
+        end
+      end
+    end
+  end
+  if result.cmd or result.startup then
+    return result
+  end
+  return nil
+end
+
+-- Read per-demo [repl] config from .tinker/<name>/tinker.toml
+local function read_demo_repl_config(filepath)
+  if not filepath or not filepath:find("/.tinker/") then
+    return nil
+  end
+
+  -- Extract demo name: the directory immediately after .tinker/
+  local demo_name = filepath:match("/.tinker/([^/]+)")
+  if not demo_name then
+    return nil
+  end
+
+  local root = find_project_root(filepath)
+  if not root then
+    return nil
+  end
+
+  local toml_path = root .. "/.tinker/" .. demo_name .. "/tinker.toml"
+  if vim.fn.filereadable(toml_path) ~= 1 then
+    return nil
+  end
+
+  local lines = vim.fn.readfile(toml_path)
+  return parse_repl_section(lines)
+end
+
 -- Send current cell to REPL
 function M.send_cell()
   local ft = vim.bo.filetype
@@ -191,6 +266,13 @@ function M.send_cell()
   if not config then
     vim.notify("No REPL configured for filetype: " .. ft, vim.log.levels.WARN)
     return
+  end
+
+  -- Override with per-demo config from tinker.toml if available
+  local filepath = vim.api.nvim_buf_get_name(0)
+  local demo_config = read_demo_repl_config(filepath)
+  if demo_config then
+    config = vim.tbl_deep_extend("force", config, demo_config)
   end
 
   local lines, err = get_current_cell()
