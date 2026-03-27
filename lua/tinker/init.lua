@@ -211,19 +211,22 @@ function M.send_cell()
           term:send({ cmd })
         end
         vim.defer_fn(function()
-          term:send(lines)
+          local block = table.concat(lines, "\n")
+          term:send("\27[200~" .. block .. "\n\27[201~")
         end, 200)
       end, 500)
     else
       vim.defer_fn(function()
-        term:send(lines)
+        local block = table.concat(lines, "\n")
+        term:send("\27[200~" .. block .. "\n\27[201~")
       end, 500)
     end
   else
     if not term:is_open() then
       term:open()
     end
-    term:send(lines)
+    local block = table.concat(lines, "\n")
+    term:send("\27[200~" .. block .. "\n\27[201~")
   end
 
   vim.cmd("wincmd p")
