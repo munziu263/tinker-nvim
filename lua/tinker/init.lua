@@ -9,8 +9,8 @@
 
 local M = {}
 
--- REPL configuration per filetype
-M.repl_config = {
+-- Default REPL configuration per filetype
+local default_repl_config = {
   python = {
     cmd = "uvx ipython",
     startup = {
@@ -23,6 +23,19 @@ M.repl_config = {
     startup = {},
   },
 }
+
+-- Default keymaps
+local default_keys = {
+  send_cell = "<leader>rs",
+  run_file = "<leader>rf",
+  rerun = "<leader>rr",
+  set_command = "<leader>rc",
+  next_cell = "]h",
+  prev_cell = "[h",
+}
+
+-- Active config (set during setup)
+M.repl_config = {}
 
 -- Session state
 local state = {
@@ -278,14 +291,47 @@ function M.prev_cell()
   vim.fn.search(search_pattern, "bW")
 end
 
--- Setup keymaps
-function M.setup()
-  vim.keymap.set("n", "<leader>rs", M.send_cell, { desc = "[R]EPL [S]end cell" })
-  vim.keymap.set("n", "<leader>rf", M.run_file, { desc = "[R]un [F]ile" })
-  vim.keymap.set("n", "<leader>rr", M.rerun, { desc = "[R]e-[R]un last command" })
-  vim.keymap.set("n", "<leader>rc", M.set_command, { desc = "[R]un [C]ommand set" })
-  vim.keymap.set("n", "]h", M.next_cell, { desc = "Next cell" })
-  vim.keymap.set("n", "[h", M.prev_cell, { desc = "Previous cell" })
+-- Setup with optional configuration
+--
+-- opts.repl: override or extend REPL configs per filetype
+-- opts.keys: override default keymaps (set to false to disable)
+--
+-- Example:
+--   require("tinker").setup({
+--     repl = {
+--       python = { cmd = "ipython", startup = {} },
+--       lua = { cmd = "lua", startup = {} },
+--     },
+--     keys = {
+--       send_cell = "<leader>cs",
+--       run_file = "<leader>cr",
+--     },
+--   })
+function M.setup(opts)
+  opts = opts or {}
+
+  -- Merge REPL configs: defaults + user overrides
+  M.repl_config = vim.tbl_deep_extend("force", default_repl_config, opts.repl or {})
+
+  -- Merge keymaps: defaults + user overrides
+  local keys = vim.tbl_deep_extend("force", default_keys, opts.keys or {})
+
+  -- Register keymaps (skip any set to false)
+  local keymap_actions = {
+    send_cell = { fn = M.send_cell, desc = "[R]EPL [S]end cell" },
+    run_file = { fn = M.run_file, desc = "[R]un [F]ile" },
+    rerun = { fn = M.rerun, desc = "[R]e-[R]un last command" },
+    set_command = { fn = M.set_command, desc = "[R]un [C]ommand set" },
+    next_cell = { fn = M.next_cell, desc = "Next cell" },
+    prev_cell = { fn = M.prev_cell, desc = "Previous cell" },
+  }
+
+  for action, lhs in pairs(keys) do
+    if lhs and keymap_actions[action] then
+      local a = keymap_actions[action]
+      vim.keymap.set("n", lhs, a.fn, { desc = a.desc })
+    end
+  end
 end
 
 return M

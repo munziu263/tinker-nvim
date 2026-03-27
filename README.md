@@ -6,16 +6,16 @@ This is the editor-side companion to [tinker-cli](https://github.com/munziu263/t
 
 ## Install
 
-tinker-nvim is a single Lua file. With [lazy.nvim](https://github.com/folke/lazy.nvim), copy `tinker.lua` into your custom plugins directory (e.g. `lua/custom/plugins/tinker.lua`) and it will self-register.
-
-Alternatively, reference it as a local plugin:
+With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  dir = "~/path/to/tinker-nvim",
-  name = "tinker",
+  "munziu263/tinker-nvim",
   event = "VeryLazy",
   dependencies = { "akinsho/toggleterm.nvim" },
+  config = function()
+    require("tinker").setup()
+  end,
 }
 ```
 
@@ -44,27 +44,50 @@ Cell delimiters mark boundaries between code blocks. The format depends on the l
 
 The Python format (`# %%`) is the percent-format used by jupytext and VS Code. Markdown cells (`# %% [markdown]`) are recognized and skipped when sending to the REPL.
 
-## REPL configuration
+## Configuration
 
-REPLs are configured per filetype in the `repl_config` table at the top of the file:
+Pass an opts table to `setup()` to override defaults:
 
 ```lua
-local repl_config = {
-  python = {
-    cmd = "uvx ipython",
-    startup = {
-      "%load_ext autoreload",
-      "%autoreload 2",
+require("tinker").setup({
+  -- Override or add REPL configs per filetype
+  repl = {
+    python = {
+      cmd = "ipython",              -- default: "uvx ipython"
+      startup = {},                  -- default: autoreload commands
+    },
+    lua = {
+      cmd = "lua",
+      startup = {},
     },
   },
-  javascript = {
-    cmd = "node",
-    startup = {},
+  -- Override keymaps (set to false to disable)
+  keys = {
+    send_cell = "<leader>cs",       -- default: "<leader>rs"
+    run_file = "<leader>cr",        -- default: "<leader>rf"
+    rerun = "<leader>cx",           -- default: "<leader>rr"
+    set_command = "<leader>cc",     -- default: "<leader>rc"
+    next_cell = "]c",               -- default: "]h"
+    prev_cell = "[c",               -- default: "[h"
   },
-}
+})
 ```
 
-To add a language, add an entry with `cmd` (the shell command to start the REPL) and `startup` (a list of commands sent to the REPL on first launch). Edit the table directly in `tinker.lua`.
+With no arguments, `setup()` uses these defaults:
+
+| Setting | Default |
+|---------|---------|
+| `repl.python.cmd` | `"uvx ipython"` |
+| `repl.python.startup` | `{"%load_ext autoreload", "%autoreload 2"}` |
+| `repl.javascript.cmd` | `"node"` |
+| `keys.send_cell` | `<leader>rs` |
+| `keys.run_file` | `<leader>rf` |
+| `keys.rerun` | `<leader>rr` |
+| `keys.set_command` | `<leader>rc` |
+| `keys.next_cell` | `]h` |
+| `keys.prev_cell` | `[h` |
+
+User-provided REPL configs are deep-merged with defaults, so you only need to specify what you want to change.
 
 ## Terminal setup
 
