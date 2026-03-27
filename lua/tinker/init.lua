@@ -1,5 +1,4 @@
--- tinker.lua — Interactive code exploration for Neovim
--- Replaces script-runner.lua
+-- tinker.nvim — Interactive code exploration for Neovim
 --
 -- Keymaps:
 --   <leader>rs  Send current cell to REPL
@@ -8,10 +7,10 @@
 --   <leader>rc  Set run command
 --   ]h / [h     Navigate cells
 
-local Tinker = {}
+local M = {}
 
 -- REPL configuration per filetype
-local repl_config = {
+M.repl_config = {
   python = {
     cmd = "uvx ipython",
     startup = {
@@ -65,15 +64,8 @@ local function get_current_cell()
   for i = cursor_row, 1, -1 do
     local line = vim.api.nvim_buf_get_lines(bufnr, i - 1, i, false)[1]
     if line:match(pattern) then
-      -- For Python, check if this is a markdown cell
       if ft == "python" and is_markdown_cell(line) then
         -- Skip markdown cells - keep searching backward
-        -- But first check if cursor is actually IN this markdown cell
-        if i == cursor_row then
-          -- Cursor is on the markdown delimiter itself, keep searching
-        else
-          -- We found a markdown cell above, keep searching for a code cell
-        end
       else
         cell_start = i
         found_delimiter = true
@@ -82,8 +74,7 @@ local function get_current_cell()
     end
   end
 
-  -- If we landed on a markdown cell delimiter or the cursor is in a markdown cell,
-  -- we need to handle this case
+  -- If we landed on a markdown cell, report it
   if found_delimiter and ft == "python" then
     local start_line = vim.api.nvim_buf_get_lines(bufnr, cell_start - 1, cell_start, false)[1]
     if is_markdown_cell(start_line) then
@@ -126,16 +117,13 @@ local function get_repl_terminal(cmd)
   local term = require("toggleterm.terminal").get(REPL_TERM_ID)
 
   if term then
-    -- Check if the terminal buffer is still valid
     if term.bufnr and vim.api.nvim_buf_is_valid(term.bufnr) then
       return term
     else
-      -- Terminal died, reset state
       state.repl_started = false
     end
   end
 
-  -- Create new terminal
   term = Terminal:new({
     cmd = cmd,
     count = REPL_TERM_ID,
@@ -183,9 +171,9 @@ local function get_runner_terminal()
 end
 
 -- Send current cell to REPL
-function Tinker.send_cell()
+function M.send_cell()
   local ft = vim.bo.filetype
-  local config = repl_config[ft]
+  local config = M.repl_config[ft]
 
   if not config then
     vim.notify("No REPL configured for filetype: " .. ft, vim.log.levels.WARN)
@@ -201,17 +189,14 @@ function Tinker.send_cell()
   local term = get_repl_terminal(config.cmd)
 
   if not state.repl_started then
-    -- First time: open terminal and send startup commands
     term:open()
     state.repl_started = true
 
-    -- Send startup commands after a short delay
     if #config.startup > 0 then
       vim.defer_fn(function()
         for _, cmd in ipairs(config.startup) do
           term:send({ cmd })
         end
-        -- Send the cell after startup
         vim.defer_fn(function()
           term:send(lines)
         end, 200)
@@ -222,19 +207,17 @@ function Tinker.send_cell()
       end, 500)
     end
   else
-    -- Terminal already running, just ensure it's visible and send
     if not term:is_open() then
       term:open()
     end
     term:send(lines)
   end
 
-  -- Return focus to the code buffer
   vim.cmd("wincmd p")
 end
 
 -- Run file with set command
-function Tinker.run_file()
+function M.run_file()
   if not state.run_command then
     vim.notify("No run command set. Use <leader>rc to set one.", vim.log.levels.WARN)
     return
@@ -246,18 +229,16 @@ function Tinker.run_file()
   end
 
   term:send({ state.run_command })
-
-  -- Return focus to code buffer
   vim.cmd("wincmd p")
 end
 
 -- Rerun last command (alias for run_file)
-function Tinker.rerun()
-  Tinker.run_file()
+function M.rerun()
+  M.run_file()
 end
 
 -- Set the run command
-function Tinker.set_command()
+function M.set_command()
   vim.ui.input({
     prompt = "Run command: ",
     default = state.run_command or "",
@@ -270,7 +251,7 @@ function Tinker.set_command()
 end
 
 -- Navigate to next cell
-function Tinker.next_cell()
+function M.next_cell()
   local ft = vim.bo.filetype
   local search_pattern
   if ft == "python" then
@@ -284,7 +265,7 @@ function Tinker.next_cell()
 end
 
 -- Navigate to previous cell
-function Tinker.prev_cell()
+function M.prev_cell()
   local ft = vim.bo.filetype
   local search_pattern
   if ft == "python" then
@@ -297,18 +278,14 @@ function Tinker.prev_cell()
   vim.fn.search(search_pattern, "bW")
 end
 
--- Lazy.nvim plugin spec
-return {
-  dir = vim.fn.stdpath("config") .. "/lua/custom/plugins",
-  name = "tinker",
-  event = "VeryLazy",
-  dependencies = { "akinsho/toggleterm.nvim" },
-  config = function()
-    vim.keymap.set("n", "<leader>rs", Tinker.send_cell, { desc = "[R]EPL [S]end cell" })
-    vim.keymap.set("n", "<leader>rf", Tinker.run_file, { desc = "[R]un [F]ile" })
-    vim.keymap.set("n", "<leader>rr", Tinker.rerun, { desc = "[R]e-[R]un last command" })
-    vim.keymap.set("n", "<leader>rc", Tinker.set_command, { desc = "[R]un [C]ommand set" })
-    vim.keymap.set("n", "]h", Tinker.next_cell, { desc = "Next cell" })
-    vim.keymap.set("n", "[h", Tinker.prev_cell, { desc = "Previous cell" })
-  end,
-}
+-- Setup keymaps
+function M.setup()
+  vim.keymap.set("n", "<leader>rs", M.send_cell, { desc = "[R]EPL [S]end cell" })
+  vim.keymap.set("n", "<leader>rf", M.run_file, { desc = "[R]un [F]ile" })
+  vim.keymap.set("n", "<leader>rr", M.rerun, { desc = "[R]e-[R]un last command" })
+  vim.keymap.set("n", "<leader>rc", M.set_command, { desc = "[R]un [C]ommand set" })
+  vim.keymap.set("n", "]h", M.next_cell, { desc = "Next cell" })
+  vim.keymap.set("n", "[h", M.prev_cell, { desc = "Previous cell" })
+end
+
+return M
