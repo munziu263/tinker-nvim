@@ -77,107 +77,151 @@ function M.set_fallback_highlights()
   -- Italic: purple
   vim.api.nvim_set_hl(0, "@markup.italic", { fg = "#c678dd", italic = true, default = true })
 
-  -- Raw/code: orange
+  -- Raw/code: orange (inline `code` and fenced code blocks)
   vim.api.nvim_set_hl(0, "@markup.raw", { fg = "#d19a66", default = true })
+  vim.api.nvim_set_hl(0, "@markup.raw.markdown_inline", { fg = "#d19a66", default = true })
+  vim.api.nvim_set_hl(0, "@markup.raw.block", { fg = "#d19a66", default = true })
+
+  -- Strikethrough
+  vim.api.nvim_set_hl(0, "@markup.strikethrough", { strikethrough = true, default = true })
 
   -- Lists: red
   vim.api.nvim_set_hl(0, "@markup.list", { fg = "#e06c75", default = true })
 
-  -- Links: blue + underline
-  vim.api.nvim_set_hl(0, "@markup.link.label", { fg = "#61afef", underline = true, default = true })
+  -- Quotes: muted italic
+  vim.api.nvim_set_hl(0, "@markup.quote", { fg = "#5c6370", italic = true, default = true })
 
-  -- Punctuation special: muted grey
+  -- Links: blue + underline
+  vim.api.nvim_set_hl(0, "@markup.link", { fg = "#61afef", default = true })
+  vim.api.nvim_set_hl(0, "@markup.link.label", { fg = "#61afef", underline = true, default = true })
+  vim.api.nvim_set_hl(0, "@markup.link.url", { fg = "#56b6c2", underline = true, default = true })
+
+  -- Punctuation: muted grey for markup delimiters (*, _, `, etc.)
   vim.api.nvim_set_hl(0, "@punctuation.special", { fg = "#5c6370", default = true })
+  vim.api.nvim_set_hl(0, "@punctuation.delimiter", { fg = "#5c6370", default = true })
 end
 
---- Apply treesitter highlights to markdown cells in a buffer
+--- Apply a highlights query to a single tree and map captures back to buffer
+--- positions. The markdown content was assembled from `cell.content_lines`,
+--- each buffer line of which is prefixed by `# ` (2 chars) relative to the
+--- original buffer row `cell.start_row + 1`.
+--- @param bufnr number
+--- @param cell table
+--- @param markdown_text string
+--- @param tree userdata  Treesitter tree
+--- @param query userdata Treesitter query
+local function apply_query_on_tree(bufnr, cell, markdown_text, tree, query)
+  local root = tree:root()
+
+  for id, node, _ in query:iter_captures(root, markdown_text, 0, -1) do
+    local capture_name = query.captures[id]
+    local sr, sc, er, ec = node:range()
+
+    -- Clamp end position when er > sr and ec == 0 to avoid bleeding
+    if er > sr and ec == 0 then
+      er = er - 1
+      if cell.content_lines[er + 1] then
+        ec = #cell.content_lines[er + 1]
+      else
+        ec = 0
+      end
+    end
+
+    -- Calculate buffer positions. Content starts at cell.start_row + 1 and
+    -- every content line has a `# ` prefix, so shift columns by +2.
+    local buf_start_row = cell.start_row + 1 + sr
+    local buf_end_row = cell.start_row + 1 + er
+    local buf_start_col = sc + 2
+    local buf_end_col = ec + 2
+
+    pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, buf_start_row, buf_start_col, {
+      end_row = buf_end_row,
+      end_col = buf_end_col,
+      hl_group = "@" .. capture_name,
+      priority = 200,
+      strict = false,
+    })
+  end
+end
+
+--- Recursively walk a LanguageTree and all injected children, applying each
+--- language's own highlights query to its trees. This is what picks up
+--- inline markup (bold/italic/inline code) which lives in the injected
+--- `markdown_inline` language tree.
+--- @param bufnr number
+--- @param cell table
+--- @param markdown_text string
+--- @param ltree userdata  LanguageTree
+local function apply_ltree(bufnr, cell, markdown_text, ltree)
+  local lang = ltree:lang()
+  local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
+
+  if query_ok and query then
+    for _, tree in ipairs(ltree:trees()) do
+      apply_query_on_tree(bufnr, cell, markdown_text, tree, query)
+    end
+  end
+
+  for _, child in pairs(ltree:children()) do
+    apply_ltree(bufnr, cell, markdown_text, child)
+  end
+end
+
+--- Apply treesitter highlights to markdown cells in a buffer. Callers must
+--- have verified parser availability via `ensure_parsers()` during setup.
 --- @param bufnr number Buffer number
 function M.apply_highlights(bufnr)
-  -- Validate buffer
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
 
   -- Only apply to Python files
-  local ft = vim.bo[bufnr].filetype
-  if ft ~= "python" then
+  if vim.bo[bufnr].filetype ~= "python" then
     return
   end
 
   -- Clear existing highlights
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
-  -- Try to load markdown parser
-  local ok = pcall(vim.treesitter.language.add, "markdown")
-  if not ok then
-    return
-  end
-
-  -- Get the highlights query for markdown
-  local query_ok, query = pcall(vim.treesitter.query.get, "markdown", "highlights")
-  if not query_ok or not query then
-    return
-  end
-
-  -- Find all markdown cells
   local cells = M.find_markdown_cells(bufnr)
 
   for _, cell in ipairs(cells) do
-    -- Join content lines into a single markdown string
     local markdown_text = table.concat(cell.content_lines, "\n")
 
     if #markdown_text > 0 then
-      -- Create a string parser for the markdown content
-      local parser_ok, parser = pcall(vim.treesitter.get_string_parser, markdown_text, "markdown")
-      if parser_ok and parser then
-        local parse_ok = pcall(function()
-          parser:parse()
-        end)
-
-        if parse_ok then
-          parser:for_each_tree(function(tree, _)
-            local root = tree:root()
-
-            for id, node, _ in query:iter_captures(root, markdown_text, 0, -1) do
-              local capture_name = query.captures[id]
-              local sr, sc, er, ec = node:range()
-
-              -- Clamp end position when er > sr and ec == 0 to avoid bleeding
-              if er > sr and ec == 0 then
-                er = er - 1
-                -- Get the length of the line at er
-                if cell.content_lines[er + 1] then
-                  ec = #cell.content_lines[er + 1]
-                else
-                  ec = 0
-                end
-              end
-
-              -- Calculate buffer positions
-              -- cell.start_row is the `# %% [markdown]` line (0-indexed)
-              -- Content starts at cell.start_row + 1
-              -- sr is relative to the markdown content, so buffer row = cell.start_row + 1 + sr
-              local buf_start_row = cell.start_row + 1 + sr
-              local buf_end_row = cell.start_row + 1 + er
-
-              -- Column offset: add 2 to skip the `# ` prefix
-              local buf_start_col = sc + 2
-              local buf_end_col = ec + 2
-
-              -- Apply the extmark
-              pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, buf_start_row, buf_start_col, {
-                end_row = buf_end_row,
-                end_col = buf_end_col,
-                hl_group = "@" .. capture_name,
-                priority = 200,
-                strict = false,
-              })
-            end
-          end)
-        end
-      end
+      local parser = vim.treesitter.get_string_parser(markdown_text, "markdown")
+      parser:parse(true) -- parse injections too
+      apply_ltree(bufnr, cell, markdown_text, parser)
     end
   end
+end
+
+--- Verify the required treesitter parsers are available. Returns true on
+--- success; on failure, notifies the user with an actionable message and
+--- returns false so the caller can bail out of setup.
+--- @return boolean
+local function ensure_parsers()
+  if not vim.treesitter or not vim.treesitter.language or not vim.treesitter.language.add then
+    vim.notify(
+      "tinker.markdown: requires Neovim >= 0.10 with treesitter support",
+      vim.log.levels.ERROR
+    )
+    return false
+  end
+
+  for _, lang in ipairs({ "markdown", "markdown_inline" }) do
+    local ok, err = pcall(vim.treesitter.language.add, lang)
+    if not ok then
+      vim.notify(
+        ("tinker.markdown: missing treesitter parser '%s' (install via `:TSInstall %s`). %s")
+          :format(lang, lang, err or ""),
+        vim.log.levels.ERROR
+      )
+      return false
+    end
+  end
+
+  return true
 end
 
 --- Setup markdown cell highlighting
@@ -193,6 +237,12 @@ function M.setup(opts)
 
   -- Return early if not enabled
   if not md_opts.enabled then
+    return
+  end
+
+  -- Verify treesitter parsers are available. If not, notify and bail out
+  -- rather than silently doing nothing on every buffer event.
+  if not ensure_parsers() then
     return
   end
 
