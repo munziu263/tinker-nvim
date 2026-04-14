@@ -417,6 +417,12 @@ function M.setup(opts)
       vim.keymap.set("n", lhs, a.fn, { desc = a.desc })
     end
   end
+
+  -- Setup markdown cell highlighting (if module is present)
+  local md_ok, markdown = pcall(require, "tinker.markdown")
+  if md_ok then
+    markdown.setup(opts)
+  end
 end
 
 return M
