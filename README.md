@@ -102,13 +102,13 @@ require("tinker").setup({
 })
 ```
 
-When enabled, the plugin uses treesitter to parse markdown content and applies highlights via extmarks. The `# ` prefix on each line is preserved but highlighting is applied to the content portion.
+When enabled, the plugin uses treesitter to parse markdown content and applies highlights via extmarks. The `# ` prefix on each line is preserved but highlighting is applied to the content portion. Block-level markup (headings, lists, quotes, code blocks) and inline markup (`**bold**`, `*italic*`, `` `code` ``, strikethrough, links) are all highlighted.
+
+**Requirements:** Neovim >= 0.10 with the `markdown` and `markdown_inline` treesitter parsers installed (`:TSInstall markdown markdown_inline`). If they are missing, `setup()` notifies an error and leaves the feature off.
 
 **Known limitations:**
 
-- Inline markdown (`**bold**`, `` `code` ``) is not yet highlighted (no injection chaining)
-- Fenced code blocks do not get nested language highlights
-- Requires Neovim >= 0.10 with nvim-treesitter markdown parser installed
+- Fenced code blocks inside markdown cells are highlighted as plain text (no nested language highlighting)
 
 ## Terminal setup
 

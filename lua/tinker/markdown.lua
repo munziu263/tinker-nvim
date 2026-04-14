@@ -167,51 +167,61 @@ local function apply_ltree(bufnr, cell, markdown_text, ltree)
   end
 end
 
---- Apply treesitter highlights to markdown cells in a buffer
+--- Apply treesitter highlights to markdown cells in a buffer. Callers must
+--- have verified parser availability via `ensure_parsers()` during setup.
 --- @param bufnr number Buffer number
 function M.apply_highlights(bufnr)
-  -- Validate buffer
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
 
   -- Only apply to Python files
-  local ft = vim.bo[bufnr].filetype
-  if ft ~= "python" then
+  if vim.bo[bufnr].filetype ~= "python" then
     return
   end
 
   -- Clear existing highlights
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
-  -- Try to load markdown parsers. `markdown_inline` is required for inline
-  -- markup (bold/italic/inline code/links); it is normally injected by the
-  -- `markdown` parser but both languages must be available.
-  if not pcall(vim.treesitter.language.add, "markdown") then
-    return
-  end
-  pcall(vim.treesitter.language.add, "markdown_inline")
-
-  -- Find all markdown cells
   local cells = M.find_markdown_cells(bufnr)
 
   for _, cell in ipairs(cells) do
-    -- Join content lines into a single markdown string
     local markdown_text = table.concat(cell.content_lines, "\n")
 
     if #markdown_text > 0 then
-      local parser_ok, parser = pcall(vim.treesitter.get_string_parser, markdown_text, "markdown")
-      if parser_ok and parser then
-        local parse_ok = pcall(function()
-          parser:parse(true) -- parse injections as well
-        end)
-
-        if parse_ok then
-          apply_ltree(bufnr, cell, markdown_text, parser)
-        end
-      end
+      local parser = vim.treesitter.get_string_parser(markdown_text, "markdown")
+      parser:parse(true) -- parse injections too
+      apply_ltree(bufnr, cell, markdown_text, parser)
     end
   end
+end
+
+--- Verify the required treesitter parsers are available. Returns true on
+--- success; on failure, notifies the user with an actionable message and
+--- returns false so the caller can bail out of setup.
+--- @return boolean
+local function ensure_parsers()
+  if not vim.treesitter or not vim.treesitter.language or not vim.treesitter.language.add then
+    vim.notify(
+      "tinker.markdown: requires Neovim >= 0.10 with treesitter support",
+      vim.log.levels.ERROR
+    )
+    return false
+  end
+
+  for _, lang in ipairs({ "markdown", "markdown_inline" }) do
+    local ok, err = pcall(vim.treesitter.language.add, lang)
+    if not ok then
+      vim.notify(
+        ("tinker.markdown: missing treesitter parser '%s' (install via `:TSInstall %s`). %s")
+          :format(lang, lang, err or ""),
+        vim.log.levels.ERROR
+      )
+      return false
+    end
+  end
+
+  return true
 end
 
 --- Setup markdown cell highlighting
@@ -227,6 +237,12 @@ function M.setup(opts)
 
   -- Return early if not enabled
   if not md_opts.enabled then
+    return
+  end
+
+  -- Verify treesitter parsers are available. If not, notify and bail out
+  -- rather than silently doing nothing on every buffer event.
+  if not ensure_parsers() then
     return
   end
 
