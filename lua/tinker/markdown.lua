@@ -6,8 +6,14 @@
 
 local M = {}
 
--- Namespace for extmarks
+-- Namespaces for extmarks. Highlights and conceal live in separate namespaces
+-- so users can disable one without touching the other and `:set conceallevel=0`
+-- can switch off concealment without affecting highlights.
 local ns = vim.api.nvim_create_namespace("tinker_markdown")
+local ns_conceal = vim.api.nvim_create_namespace("tinker_markdown_conceal")
+
+-- Module state set by setup(): whether to emit conceal extmarks.
+local conceal_enabled = false
 
 --- Find all markdown cells in a buffer
 --- @param bufnr number Buffer number
@@ -113,7 +119,7 @@ end
 local function apply_query_on_tree(bufnr, cell, markdown_text, tree, query)
   local root = tree:root()
 
-  for id, node, _ in query:iter_captures(root, markdown_text, 0, -1) do
+  for id, node, metadata in query:iter_captures(root, markdown_text, 0, -1) do
     local capture_name = query.captures[id]
     local sr, sc, er, ec = node:range()
 
@@ -141,6 +147,24 @@ local function apply_query_on_tree(bufnr, cell, markdown_text, tree, query)
       priority = 200,
       strict = false,
     })
+
+    -- If the query sets a conceal directive for this capture (e.g. on
+    -- emphasis/strong/code_span delimiter nodes), emit a second extmark in
+    -- the conceal namespace. Supports both per-capture (`metadata[id].conceal`)
+    -- and per-match (`metadata.conceal`) directives.
+    if conceal_enabled and metadata then
+      local cap_meta = metadata[id]
+      local conceal_str = (cap_meta and cap_meta.conceal) or metadata.conceal
+      if conceal_str then
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_conceal, buf_start_row, buf_start_col, {
+          end_row = buf_end_row,
+          end_col = buf_end_col,
+          conceal = conceal_str,
+          priority = 201,
+          strict = false,
+        })
+      end
+    end
   end
 end
 
@@ -180,8 +204,11 @@ function M.apply_highlights(bufnr)
     return
   end
 
-  -- Clear existing highlights
+  -- Clear existing extmarks in both namespaces
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  if conceal_enabled then
+    vim.api.nvim_buf_clear_namespace(bufnr, ns_conceal, 0, -1)
+  end
 
   local cells = M.find_markdown_cells(bufnr)
 
@@ -231,8 +258,10 @@ function M.setup(opts)
 
   -- Get markdown_cells options with defaults
   local md_opts = vim.tbl_deep_extend("force", {
-    enabled = false,
+    enabled = true,
     fallback_highlights = true,
+    conceal = true,
+    concealcursor = "nc",
   }, opts.markdown_cells or {})
 
   -- Return early if not enabled
@@ -245,6 +274,9 @@ function M.setup(opts)
   if not ensure_parsers() then
     return
   end
+
+  -- Publish the conceal flag to the module so apply_query_on_tree can read it.
+  conceal_enabled = md_opts.conceal and true or false
 
   -- Set fallback highlights if requested
   if md_opts.fallback_highlights then
@@ -260,6 +292,19 @@ function M.setup(opts)
       group = augroup,
       callback = function()
         M.set_fallback_highlights()
+      end,
+    })
+  end
+
+  -- Set concealcursor on Python windows so markers reveal on the cursor line
+  -- in the specified modes. Concealment itself requires `conceallevel >= 1`
+  -- (typically 2) — users control that globally.
+  if conceal_enabled then
+    vim.api.nvim_create_autocmd("FileType", {
+      group = augroup,
+      pattern = "python",
+      callback = function()
+        vim.wo.concealcursor = md_opts.concealcursor
       end,
     })
   end

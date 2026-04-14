@@ -91,20 +91,27 @@ User-provided REPL configs are deep-merged with defaults, so you only need to sp
 
 ## Markdown cell highlighting
 
-Python tinker files can contain markdown cells (delimited by `# %% [markdown]`). By default, these are displayed as plain comments. Enable syntax highlighting for markdown cells:
+Python tinker files can contain markdown cells (delimited by `# %% [markdown]`). The plugin highlights them using treesitter and conceals inline markup delimiters. **Both are on by default** — `require("tinker").setup()` with no arguments gets you styled headings, bold, italic, inline code, links, strikethrough, and lists, with `**`, `*`, `_`, `` ` ``, and `~~` markers concealed.
+
+To customize or disable:
 
 ```lua
 require("tinker").setup({
   markdown_cells = {
-    enabled = true,           -- Enable markdown cell highlighting (default: false)
-    fallback_highlights = true, -- Define fallback @markup.* groups (default: true)
+    enabled = true,              -- Enable markdown cell highlighting (default: true)
+    fallback_highlights = true,  -- Define fallback @markup.* groups (default: true)
+    conceal = true,              -- Conceal markup delimiters (default: true)
+    concealcursor = "nc",        -- Modes to keep concealment under cursor (default: "nc"; "" reveals)
   },
 })
+
+-- Fully disable the feature:
+require("tinker").setup({ markdown_cells = { enabled = false } })
 ```
 
-When enabled, the plugin uses treesitter to parse markdown content and applies highlights via extmarks. The `# ` prefix on each line is preserved but highlighting is applied to the content portion. Block-level markup (headings, lists, quotes, code blocks) and inline markup (`**bold**`, `*italic*`, `` `code` ``, strikethrough, links) are all highlighted.
+The `# ` prefix on each line is preserved; highlighting and conceal apply only to the content portion.
 
-**Requirements:** Neovim >= 0.10 with the `markdown` and `markdown_inline` treesitter parsers installed (`:TSInstall markdown markdown_inline`). If they are missing, `setup()` notifies an error and leaves the feature off.
+**Requirements:** Neovim >= 0.10 with the `markdown` and `markdown_inline` treesitter parsers installed (`:TSInstall markdown markdown_inline`). If they are missing, `setup()` notifies an error and leaves the feature off. Concealment is only visible when `conceallevel >= 1` (set `:set conceallevel=2` in your config — same requirement as every other markdown rendering plugin).
 
 **Known limitations:**
 
