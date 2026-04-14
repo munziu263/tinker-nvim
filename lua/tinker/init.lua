@@ -423,6 +423,12 @@ function M.setup(opts)
   if md_ok then
     markdown.setup(opts)
   end
+
+  -- Setup cell-delimiter line highlighting (if module is present)
+  local cd_ok, cell_delimiters = pcall(require, "tinker.cell_delimiters")
+  if cd_ok then
+    cell_delimiters.setup(opts.cell_delimiters)
+  end
 end
 
 return M

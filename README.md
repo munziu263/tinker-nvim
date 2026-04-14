@@ -117,6 +117,25 @@ The `# ` prefix on each line is preserved; highlighting and conceal apply only t
 
 - Fenced code blocks inside markdown cells are highlighted as plain text (no nested language highlighting)
 
+## Cell delimiter highlighting
+
+Every cell-delimiter line (`# %%`, `# %% [markdown]`, `# ---`, `// ---`) gets a full-line background tint so cell boundaries jump out visually. Code and markdown cells use distinct colors so you can tell at a glance which kind of cell is starting.
+
+On by default. Customize or disable:
+
+```lua
+require("tinker").setup({
+  cell_delimiters = {
+    enabled = true,                                   -- default: true
+    code_hl = "TinkerCellDelimiter",                  -- highlight group for `# %%`, `# ---`, `// ---`
+    markdown_hl = "TinkerCellDelimiterMarkdown",      -- highlight group for `# %% [markdown]`
+    fallback_highlights = true,                       -- define subtle default tints
+  },
+})
+```
+
+Supported filetypes: `python`, `sh`, `bash`, `javascript`, `typescript`, `javascriptreact`, `typescriptreact` (same set that `send_cell` understands).
+
 ## Terminal setup
 
 The plugin creates two named toggleterm instances:
