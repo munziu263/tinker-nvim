@@ -89,6 +89,27 @@ With no arguments, `setup()` uses these defaults:
 
 User-provided REPL configs are deep-merged with defaults, so you only need to specify what you want to change.
 
+## Markdown cell highlighting
+
+Python tinker files can contain markdown cells (delimited by `# %% [markdown]`). By default, these are displayed as plain comments. Enable syntax highlighting for markdown cells:
+
+```lua
+require("tinker").setup({
+  markdown_cells = {
+    enabled = true,           -- Enable markdown cell highlighting (default: false)
+    fallback_highlights = true, -- Define fallback @markup.* groups (default: true)
+  },
+})
+```
+
+When enabled, the plugin uses treesitter to parse markdown content and applies highlights via extmarks. The `# ` prefix on each line is preserved but highlighting is applied to the content portion.
+
+**Known limitations:**
+
+- Inline markdown (`**bold**`, `` `code` ``) is not yet highlighted (no injection chaining)
+- Fenced code blocks do not get nested language highlights
+- Requires Neovim >= 0.10 with nvim-treesitter markdown parser installed
+
 ## Terminal setup
 
 The plugin creates two named toggleterm instances:
