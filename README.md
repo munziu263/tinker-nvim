@@ -143,6 +143,22 @@ pip install tinker-cli
 
 The CLI produces files with cell delimiters that this plugin can run. See the [tinker-cli repo](https://github.com/munziu263/tinker-cli) for details.
 
+## Development
+
+Tests use [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) busted-style specs and run against a headless Neovim.
+
+```
+make test
+```
+
+On first run, this clones plenary into `.deps/` (gitignored). Subsequent runs reuse it. To drop the cache:
+
+```
+make clean-deps
+```
+
+CI runs the same `make test` command on every push to `master` and on pull requests (see `.github/workflows/test.yml`).
+
 ## License
 
 MIT
