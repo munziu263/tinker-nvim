@@ -1,5 +1,7 @@
 # tinker-nvim
 
+> Part of the **tinker** toolkit: [tinker-cli](https://github.com/munziu263/tinker-cli) · **tinker-nvim** (this repo)
+
 A Neovim plugin for interactive code exploration. Sends cells to a REPL and runs files with a configurable command. Uses [toggleterm.nvim](https://github.com/akinsho/toggleterm.nvim) for terminal management.
 
 This is the editor-side companion to [tinker-cli](https://github.com/munziu263/tinker-cli) -- the CLI produces demo files with cell delimiters, and this plugin runs them interactively. They are fully independent: you can use either one without the other.
