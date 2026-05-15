@@ -240,8 +240,11 @@ local function ensure_parsers()
     local ok, err = pcall(vim.treesitter.language.add, lang)
     if not ok then
       vim.notify(
-        ("tinker.markdown: missing treesitter parser '%s' (install via `:TSInstall %s`). %s")
-          :format(lang, lang, err or ""),
+        ("tinker.markdown: missing treesitter parser '%s' (install via `:TSInstall %s`). %s"):format(
+          lang,
+          lang,
+          err or ""
+        ),
         vim.log.levels.ERROR
       )
       return false

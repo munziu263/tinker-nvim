@@ -8,6 +8,7 @@
 --   ]h / [h     Navigate cells
 
 local M = {}
+local cell_delimiters = require("tinker.cell_delimiters")
 
 -- Default REPL configuration per filetype
 local default_repl_config = {
@@ -47,23 +48,22 @@ local state = {
 local REPL_TERM_ID = 50
 local RUNNER_TERM_ID = 51
 
--- Get the cell delimiter pattern for a filetype
+-- Get the cell delimiter pattern for a filetype (delegates to cell_delimiters)
 local function get_cell_pattern(ft)
-  if ft == "python" then
-    return "^# %%%%"
-  elseif ft == "sh" or ft == "bash" then
-    return "^# %-%-%-"
-  else
-    return "^// %-%-%-"
+  local pats = cell_delimiters.patterns_for(ft)
+  if pats then
+    return pats.code
   end
+  return "^// %-%-%-"
 end
 
--- Get the cell delimiter for checking markdown cells (Python only)
+-- Check if a line starts a markdown cell (Python only)
 local function is_markdown_cell(line)
-  return line:match("^# %%%% %[markdown%]") ~= nil
+  local pats = cell_delimiters.patterns_for("python")
+  return pats.markdown and line:match(pats.markdown) ~= nil
 end
 
--- Find cell boundaries around cursor
+-- Find cell boundaries around cursor (exposed as M._get_current_cell for testing)
 local function get_current_cell()
   local bufnr = vim.api.nvim_get_current_buf()
   local cursor_row = vim.api.nvim_win_get_cursor(0)[1] -- 1-indexed
@@ -184,7 +184,8 @@ local function get_runner_terminal()
 end
 
 -- Project-root markers (same as tinker CLI)
-local root_markers = { ".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml" }
+local root_markers =
+  { ".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml" }
 
 -- Walk up from `path` to find the project root
 local function find_project_root(path)
@@ -350,30 +351,18 @@ end
 
 -- Navigate to next cell
 function M.next_cell()
-  local ft = vim.bo.filetype
-  local search_pattern
-  if ft == "python" then
-    search_pattern = "^# %%"
-  elseif ft == "sh" or ft == "bash" then
-    search_pattern = "^# ---"
-  else
-    search_pattern = "^// ---"
+  local search_pattern = cell_delimiters.vim_search_pattern_for(vim.bo.filetype)
+  if search_pattern then
+    vim.fn.search(search_pattern, "W")
   end
-  vim.fn.search(search_pattern, "W")
 end
 
 -- Navigate to previous cell
 function M.prev_cell()
-  local ft = vim.bo.filetype
-  local search_pattern
-  if ft == "python" then
-    search_pattern = "^# %%"
-  elseif ft == "sh" or ft == "bash" then
-    search_pattern = "^# ---"
-  else
-    search_pattern = "^// ---"
+  local search_pattern = cell_delimiters.vim_search_pattern_for(vim.bo.filetype)
+  if search_pattern then
+    vim.fn.search(search_pattern, "bW")
   end
-  vim.fn.search(search_pattern, "bW")
 end
 
 -- Setup with optional configuration
@@ -424,11 +413,11 @@ function M.setup(opts)
     markdown.setup(opts)
   end
 
-  -- Setup cell-delimiter line highlighting (if module is present)
-  local cd_ok, cell_delimiters = pcall(require, "tinker.cell_delimiters")
-  if cd_ok then
-    cell_delimiters.setup(opts.cell_delimiters)
-  end
+  -- Setup cell-delimiter line highlighting
+  cell_delimiters.setup(opts.cell_delimiters)
 end
+
+-- Exposed for testing only
+M._get_current_cell = get_current_cell
 
 return M

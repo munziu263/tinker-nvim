@@ -141,16 +141,19 @@ describe("tinker.cell_delimiters.apply_highlights", function()
 end)
 
 describe("tinker.cell_delimiters.set_fallback_highlights", function()
-  it("defines TinkerCellDelimiter and TinkerCellDelimiterMarkdown with distinct backgrounds", function()
-    cells.set_fallback_highlights()
+  it(
+    "defines TinkerCellDelimiter and TinkerCellDelimiterMarkdown with distinct backgrounds",
+    function()
+      cells.set_fallback_highlights()
 
-    local code = vim.api.nvim_get_hl(0, { name = "TinkerCellDelimiter" })
-    local md = vim.api.nvim_get_hl(0, { name = "TinkerCellDelimiterMarkdown" })
+      local code = vim.api.nvim_get_hl(0, { name = "TinkerCellDelimiter" })
+      local md = vim.api.nvim_get_hl(0, { name = "TinkerCellDelimiterMarkdown" })
 
-    assert.is_not_nil(code.bg)
-    assert.is_not_nil(md.bg)
-    assert.are_not.equal(code.bg, md.bg)
-  end)
+      assert.is_not_nil(code.bg)
+      assert.is_not_nil(md.bg)
+      assert.are_not.equal(code.bg, md.bg)
+    end
+  )
 end)
 
 describe("tinker.cell_delimiters.setup", function()

@@ -22,7 +22,7 @@ local markdown_hl = "TinkerCellDelimiterMarkdown"
 --- simply omit it.
 --- @param ft string
 --- @return table|nil patterns { code = <lua pattern>, markdown? = <lua pattern> }
-local function patterns_for(ft)
+function M.patterns_for(ft)
   if ft == "python" then
     return {
       markdown = "^# %%%% %[markdown%]",
@@ -41,6 +41,26 @@ local function patterns_for(ft)
   return nil
 end
 
+--- Return a vim-regex search pattern for cell delimiters in a given filetype.
+--- Used by vim.fn.search() for cell navigation.
+--- @param ft string
+--- @return string|nil pattern
+function M.vim_search_pattern_for(ft)
+  if ft == "python" then
+    return "^# %%"
+  elseif ft == "sh" or ft == "bash" then
+    return "^# ---"
+  elseif
+    ft == "javascript"
+    or ft == "typescript"
+    or ft == "javascriptreact"
+    or ft == "typescriptreact"
+  then
+    return "^// ---"
+  end
+  return nil
+end
+
 --- Scan a buffer for cell-delimiter lines.
 --- @param bufnr integer
 --- @return table[] delims List of { row = 0-indexed, kind = "code"|"markdown" }
@@ -49,7 +69,7 @@ function M.find_delimiters(bufnr)
     return {}
   end
 
-  local pats = patterns_for(vim.bo[bufnr].filetype)
+  local pats = M.patterns_for(vim.bo[bufnr].filetype)
   if not pats then
     return {}
   end
@@ -102,7 +122,7 @@ function M.set_fallback_highlights()
 end
 
 --- Filetypes we auto-apply highlights on. Matches the patterns in
---- `patterns_for()`; keep them in sync.
+--- `M.patterns_for()`; keep them in sync.
 local autocmd_filetypes = {
   "python",
   "sh",
